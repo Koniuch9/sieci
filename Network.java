@@ -37,7 +37,9 @@ public class Network {
 	public void train(Matrix inputs, Matrix results) 
 	{	
 		Matrix inputBatch = inputs.getMatrix(0,Network.inputs,0,batchSize-1);
+		inputBatch.print(2,2);
 		Matrix resultBatch = results.getMatrix(0,Network.outputs-1,0,batchSize-1);
+		resultBatch.print(2,2);
 		for(int i=0;i<maxIterations;i++) {
 			/*Matrix inputBatch = inputs.getMatrix(0,Network.inputs,i*batchSize,(i+1)*batchSize-1);
 			Matrix resultBatch = results.getMatrix(0,Network.outputs-1,i*batchSize,(i+1)*batchSize-1);*/
@@ -49,6 +51,10 @@ public class Network {
 			outputs.print(2, 2);
 			System.out.println("Desired outputs");
 			resultBatch.print(2,2);
+			System.out.println("Cost");
+			cost.print(2, 2);
+			System.out.println("Errors");
+			errors.print(2,2);
 		}
 	}
 	
@@ -60,7 +66,7 @@ public class Network {
 	{		
 		Matrix firstLayer = sigmoid(weightsInputHidden.times(inputBatch));
 		for(int i = 0;i < batchSize;i++)firstLayer.set(hiddenLayerSize,i,1.);	
-		hidden = firstLayer;
+		hidden = firstLayer;		
 		return sigmoid(weightsHiddenOutput.times(firstLayer));
 	}	
 	
@@ -74,7 +80,11 @@ public class Network {
 	public void propagateBackward(Matrix errors,Matrix activationsInput, Matrix activationsHidden, Matrix activationsOutput) 
 	{
 		Matrix deltaO = deltaOutput(activationsOutput, errors);
+		System.out.println("Delta Output");
+		deltaO.print(2,2);
 		Matrix deltaH = deltaHidden(activationsHidden, deltaO);
+		System.out.println("Delta Hidden");
+		deltaH.print(2,2);
 		updateInputHidden(deltaH,activationsInput);
 		updateHiddenOutput(deltaO,activationsHidden);
 	}
@@ -96,8 +106,8 @@ public class Network {
 	 */
 	public Matrix errors(Matrix cost) 
 	{
-		Matrix ones = new Matrix(batchSize,1,1);
-		return cost.times(ones).times(1/batchSize);
+		Matrix ones = new Matrix(batchSize,1,1.);
+		return cost.times(ones).times(1./(2.*batchSize));
 	}
 	
 	/** 
@@ -108,7 +118,7 @@ public class Network {
 	public Matrix deltaOutput(Matrix activationsOutput, Matrix errors) 
 	{
 		Matrix ones = new Matrix(batchSize,10,1.);
-		return dSigmoid(errors.transpose()).times(activationsOutput).times(ones).times(1/batchSize);
+		return errors.transpose().times(dSigmoid(activationsOutput.times(ones).times(1./(2.*batchSize))));
 	}
 	
 	/** 
@@ -119,8 +129,8 @@ public class Network {
 	 */
 	public Matrix deltaHidden(Matrix activationsHidden, Matrix deltaO) 
 	{
-		Matrix ones = new Matrix(batchSize,hiddenLayerSize+1,1);
-		return deltaO.times(weightsHiddenOutput).times(dSigmoid(activationsHidden)).times(ones).times(1/batchSize);
+		Matrix ones = new Matrix(batchSize,hiddenLayerSize+1,1.);
+		return deltaO.times(weightsHiddenOutput).times(dSigmoid(activationsHidden.times(ones).times(1./(2.*batchSize))));
 	}
 	
 	/**
@@ -131,8 +141,8 @@ public class Network {
 	 */
 	public void updateInputHidden(Matrix deltaH, Matrix activationsInput) 
 	{
-		Matrix ones = new Matrix(batchSize,1,1);
-		weightsInputHidden.minusEquals((activationsInput.times(ones).times(1/batchSize).times(deltaH)).transpose().times(learningFactor));
+		Matrix ones = new Matrix(batchSize,1,1.);
+		weightsInputHidden.plusEquals((activationsInput.times(ones).times(1./(2.*batchSize)).times(deltaH)).transpose().times(learningFactor));
 	}
 	
 	/**
@@ -143,8 +153,8 @@ public class Network {
 	 */
 	public void updateHiddenOutput(Matrix deltaO, Matrix activationsHidden) 
 	{
-		Matrix ones = new Matrix(batchSize,1,1);
-		weightsHiddenOutput.minusEquals((activationsHidden.times(ones).times(1/batchSize).times(deltaO)).transpose().times(learningFactor));
+		Matrix ones = new Matrix(batchSize,1,1.);
+		weightsHiddenOutput.plusEquals((activationsHidden.times(ones).times(1./(2.*batchSize)).times(deltaO)).transpose().times(learningFactor));
 	}
 	
 	public double sigmoid(double x) 

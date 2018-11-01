@@ -2,12 +2,12 @@ import java.io.IOException;
 import Jama.*;
 
 public class L2Main {
-	public static final double learningFactor = .5;
+	public static final double learningFactor = .25;
 	public static final double startingWeights = 1.;
 	private static final int hiddenLayerSize = 10;
 	private static final double minError = .01;
-	private static final int batchSize = 1;
-	private static final int maxIterations = 100;
+	private static final int batchSize = 5;
+	private static final int maxIterations = 1;
 	private static final double momentum = .5;
 	
 	private static final int testSize = 25000;
