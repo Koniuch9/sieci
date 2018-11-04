@@ -1,3 +1,5 @@
+import java.util.Random;
+
 import Jama.*;
 
 public class Network {
@@ -16,19 +18,22 @@ public class Network {
 	private Matrix weightsHiddenOutput;
 	private Matrix netHidden;
 	private Matrix netOutput;
+	private Matrix prevHidden;
+	private Matrix prevOutput;
 	
 	public Network(double learningFactor, double startingWeights, int hiddenLayerSize, double minError, int batchSize,
-			int maxIterations) {
+			int maxIterations, double momentum) {
 		this.learningFactor = learningFactor;
 		this.startingWeights = startingWeights;
 		this.hiddenLayerSize = hiddenLayerSize;
 		this.minError = minError;
 		this.batchSize = batchSize;
 		this.maxIterations = maxIterations;
-		
+		this.momentum = momentum;
 		this.weightsInputHidden = Matrix.random(hiddenLayerSize+1,inputs+1).times(2*startingWeights).minus(new Matrix(hiddenLayerSize+1,inputs+1,startingWeights));		
-		this.weightsHiddenOutput = Matrix.random(outputs,hiddenLayerSize+1).times(2*startingWeights).minus(new Matrix(outputs,hiddenLayerSize+1,startingWeights));		
-		
+		this.weightsHiddenOutput = Matrix.random(outputs,hiddenLayerSize+1).times(2*startingWeights).minus(new Matrix(outputs,hiddenLayerSize+1,startingWeights));
+		this.prevHidden = new Matrix(hiddenLayerSize+1,inputs+1,0);
+		this.prevOutput = new Matrix(outputs,hiddenLayerSize+1,0);		
 	}	
 	
 	/**
@@ -36,7 +41,7 @@ public class Network {
 	 * @param inputs [inputs+1 X trainSize]
 	 * @param results [outputs X trainSize]
 	 */
-	public void train(Matrix inputs, Matrix results) 
+	public void train(Matrix inputs, Matrix results, Matrix testIn, Matrix testOut) 
 	{	
 		/*Matrix inputBatch = inputs.getMatrix(0,Network.inputs,0,batchSize-1);
 		Matrix resultBatch = results.getMatrix(0,Network.outputs-1,0,batchSize-1);	*/
@@ -45,38 +50,25 @@ public class Network {
 		int i = 0;
 		int iter = 0;
 		double err = .0;
+		Random r = new Random();
 		//for(int i=0;i<maxIterations && error();i++)
 		Matrix cost = null;
 		do {
 			Matrix inputBatch = inputs.getMatrix(0,Network.inputs,i*batchSize,(i+1)*batchSize-1);
 			Matrix resultBatch = results.getMatrix(0,Network.outputs-1,i*batchSize,(i+1)*batchSize-1);
 			Matrix outputs = propagateForward(inputBatch);
-			cost = costFunction(outputs,resultBatch);
-						
-			propagateBackward(cost,inputBatch,netHidden,outputs);
-			/*if(i*batchSize > L2Main.trainSize - 20*batchSize) {
-			System.out.println("Net Hidden");
-			netHidden.print(2, 2);
-			System.out.println("Net Output");
-			netOutput.print(2,2);
-			System.out.println("Weights input:");
-			weightsInputHidden.print(2,2);
-			System.out.println("Wegiths hidden");
-			weightsHiddenOutput.print(2,2);
-			System.out.println("Outputs:");
-			outputs.print(2, 2);
-			System.out.println("Desired outputs");
-			resultBatch.print(2,2);
-			System.out.println("Cost");
-			cost.print(2, 2);			
-			}*/
-			System.out.println(err);
+			cost = costFunction(outputs,resultBatch);						
+			propagateBackward(cost,inputBatch,netHidden,outputs);			
 			i++;
+			err += errors(cost);
 			if(batchSize*(1+i) > L2Main.trainSize) {
-				i = 0;
+				err /= i;
+				i = r.nextInt(batchSize);
 				iter++;
+				learningFactor*=.97;
+				System.out.format("Epoka %d, error: %.5f, wsp_uczenia: %.4f, test: %.2f%%\n",iter,err,learningFactor,test(testIn,testOut)/L2Main.testSize*100);
 			}
-		}while(iter < maxIterations && (err=errors(cost)) > minError);
+		}while(iter < maxIterations && err > minError);
 		System.out.println(iter);
 	}
 	
@@ -113,8 +105,8 @@ public class Network {
 	public Matrix propagateForward(Matrix inputBatch) 
 	{		
 		Matrix firstLayer = sigmoid(weightsInputHidden.times(inputBatch));
-		for(int i = 0;i < batchSize;i++)firstLayer.set(hiddenLayerSize,i,1.);	
-		netHidden = firstLayer;		
+		netHidden = firstLayer;	
+		for(int i = 0;i < batchSize;i++)firstLayer.set(hiddenLayerSize,i,1.);			
 		return netOutput=sigmoid(weightsHiddenOutput.times(firstLayer));
 	}	
 	
@@ -187,7 +179,8 @@ public class Network {
 	 */
 	public void updateInputHidden(Matrix deltaH, Matrix activationsInput) 
 	{		
-		weightsInputHidden.plusEquals((meanBatch(activationsInput.times(deltaH))).transpose().times(learningFactor));
+		
+		weightsInputHidden.plusEquals(prevHidden = (prevHidden.times(momentum).plus((meanBatch(activationsInput.times(deltaH))).transpose()).times(learningFactor)));
 	}
 	
 	/**
@@ -198,7 +191,7 @@ public class Network {
 	 */
 	public void updateHiddenOutput(Matrix deltaO, Matrix activationsHidden) 
 	{		
-		weightsHiddenOutput.plusEquals((meanBatch(activationsHidden.times(deltaO))).transpose().times(learningFactor));
+		weightsHiddenOutput.plusEquals(prevOutput = (prevOutput.times(momentum).plus(prevOutput=(meanBatch(activationsHidden.times(deltaO))).transpose())).times(learningFactor));
 	}
 	
 	public Matrix meanBatch(Matrix batch)
@@ -242,6 +235,19 @@ public class Network {
 			}
 		}
 		return ret;
+	}
+	
+	public void showBatch(Matrix inputs, Matrix results) 
+	{
+		Random r = new Random();
+		int x = r.nextInt(L2Main.testSize/batchSize);
+		Matrix inputBatch = inputs.getMatrix(0,Network.inputs,x*batchSize,(x+1)*batchSize-1);
+		Matrix resultBatch = results.getMatrix(0,Network.outputs-1,x*batchSize,(x+1)*batchSize-1);
+		Matrix outs = propagateForward(inputBatch);
+		System.out.println("Outputs");
+		outs.print(2, 2);
+		System.out.println("Desireed outputs");
+		resultBatch.print(2,2);
 	}
 	
 	public void printWeights() 
